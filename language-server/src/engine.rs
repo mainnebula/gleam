@@ -25,8 +25,8 @@ use itertools::Itertools;
 use lsp::CodeAction;
 use lsp_server::ResponseError;
 use lsp_types::{
-    self as lsp, DocumentSymbol, Hover, HoverContents, MarkedString, Position,
-    PrepareRenameResponse, Range, SignatureHelp, SymbolKind, SymbolTag, TextEdit, Url,
+    self as lsp, DocumentSymbol, FoldingRange, FoldingRangeKind, Hover, HoverContents, MarkedString,
+    Position, PrepareRenameResponse, Range, SignatureHelp, SymbolKind, SymbolTag, TextEdit, Url,
     WorkspaceEdit,
 };
 use std::{collections::HashSet, sync::Arc};
@@ -608,6 +608,109 @@ where
             }
 
             Ok(symbols)
+        })
+    }
+
+    pub fn folding_range(
+        &mut self,
+        params: lsp::FoldingRangeParams,
+    ) -> Response<Vec<FoldingRange>> {
+        self.respond(|this| {
+            let mut ranges = vec![];
+            let Some(module) = this.module_for_uri(&params.text_document.uri) else {
+                return Ok(ranges);
+            };
+            let line_numbers = LineNumbers::new(&module.code);
+
+            // Fold consecutive imports as a single range.
+            if module.ast.definitions.imports.len() > 1 {
+                let first = &module.ast.definitions.imports[0];
+                let last = module.ast.definitions.imports.last().expect("imports non-empty");
+                let start = line_numbers.line_and_column_number(first.location.start);
+                let end = line_numbers.line_and_column_number(last.location.end);
+
+                // Only fold if imports span more than one line.
+                if end.line > start.line {
+                    ranges.push(FoldingRange {
+                        start_line: start.line - 1,
+                        start_character: None,
+                        end_line: end.line - 1,
+                        end_character: None,
+                        kind: Some(FoldingRangeKind::Imports),
+                        collapsed_text: None,
+                    });
+                }
+            }
+
+            // Fold function bodies.
+            for function in &module.ast.definitions.functions {
+                let start = line_numbers.line_and_column_number(function.location.start);
+                let end = line_numbers.line_and_column_number(function.end_position);
+
+                if end.line > start.line {
+                    ranges.push(FoldingRange {
+                        start_line: start.line - 1,
+                        start_character: None,
+                        end_line: end.line - 1,
+                        end_character: None,
+                        kind: Some(FoldingRangeKind::Region),
+                        collapsed_text: None,
+                    });
+                }
+            }
+
+            // Fold custom type definitions.
+            for custom_type in &module.ast.definitions.custom_types {
+                let start = line_numbers.line_and_column_number(custom_type.location.start);
+                let end = line_numbers.line_and_column_number(custom_type.end_position);
+
+                if end.line > start.line {
+                    ranges.push(FoldingRange {
+                        start_line: start.line - 1,
+                        start_character: None,
+                        end_line: end.line - 1,
+                        end_character: None,
+                        kind: Some(FoldingRangeKind::Region),
+                        collapsed_text: None,
+                    });
+                }
+            }
+
+            // Fold multi-line constants.
+            for constant in &module.ast.definitions.constants {
+                let start = line_numbers.line_and_column_number(constant.location.start);
+                let end = line_numbers.line_and_column_number(constant.value.location().end);
+
+                if end.line > start.line {
+                    ranges.push(FoldingRange {
+                        start_line: start.line - 1,
+                        start_character: None,
+                        end_line: end.line - 1,
+                        end_character: None,
+                        kind: Some(FoldingRangeKind::Region),
+                        collapsed_text: None,
+                    });
+                }
+            }
+
+            // Fold multi-line type aliases.
+            for alias in &module.ast.definitions.type_aliases {
+                let start = line_numbers.line_and_column_number(alias.location.start);
+                let end = line_numbers.line_and_column_number(alias.type_ast.location().end);
+
+                if end.line > start.line {
+                    ranges.push(FoldingRange {
+                        start_line: start.line - 1,
+                        start_character: None,
+                        end_line: end.line - 1,
+                        end_character: None,
+                        kind: Some(FoldingRangeKind::Region),
+                        collapsed_text: None,
+                    });
+                }
+            }
+
+            Ok(ranges)
         })
     }
 

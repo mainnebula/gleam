@@ -7,8 +7,9 @@ use lsp_types::{
     self as lsp,
     notification::{DidChangeTextDocument, DidCloseTextDocument, DidSaveTextDocument},
     request::{
-        CodeActionRequest, Completion, DocumentSymbolRequest, Formatting, GotoTypeDefinition,
-        HoverRequest, PrepareRenameRequest, References, Rename, SignatureHelpRequest,
+        CodeActionRequest, Completion, DocumentSymbolRequest, FoldingRangeRequest, Formatting,
+        GotoTypeDefinition, HoverRequest, PrepareRenameRequest, References, Rename,
+        SignatureHelpRequest,
     },
 };
 use std::time::Duration;
@@ -32,6 +33,7 @@ pub enum Request {
     PrepareRename(lsp::TextDocumentPositionParams),
     Rename(lsp::RenameParams),
     FindReferences(lsp::ReferenceParams),
+    FoldingRange(lsp::FoldingRangeParams),
 }
 
 impl Request {
@@ -81,6 +83,10 @@ impl Request {
             "textDocument/references" => {
                 let params = cast_request::<References>(request);
                 Some(Message::Request(id, Request::FindReferences(params)))
+            }
+            "textDocument/foldingRange" => {
+                let params = cast_request::<FoldingRangeRequest>(request);
+                Some(Message::Request(id, Request::FoldingRange(params)))
             }
             _ => None,
         }

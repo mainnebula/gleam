@@ -108,6 +108,7 @@ where
             Request::Rename(param) => self.rename(param),
             Request::GoToTypeDefinition(param) => self.goto_type_definition(param),
             Request::FindReferences(param) => self.find_references(param),
+            Request::FoldingRange(param) => self.folding_range(param),
         };
 
         self.publish_feedback(feedback);
@@ -428,6 +429,14 @@ where
         self.respond_with_engine(path, |engine| engine.find_references(params))
     }
 
+    fn folding_range(
+        &mut self,
+        params: lsp::FoldingRangeParams,
+    ) -> (Result<Json, ResponseError>, Feedback) {
+        let path = super::path(&params.text_document.uri);
+        self.respond_with_engine(path, |engine| engine.folding_range(params))
+    }
+
     fn cache_file_in_memory(&mut self, path: Utf8PathBuf, text: String) -> Feedback {
         self.project_changed(&path);
         if let Err(error) = self.io.write_mem_cache(&path, &text) {
@@ -520,7 +529,7 @@ fn initialisation_handshake(connection: &lsp_server::Connection) -> InitializePa
         })),
         document_link_provider: None,
         color_provider: None,
-        folding_range_provider: None,
+        folding_range_provider: Some(lsp::FoldingRangeProviderCapability::Simple(true)),
         declaration_provider: None,
         execute_command_provider: None,
         workspace: None,
